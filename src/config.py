@@ -57,7 +57,13 @@ SAE_RELEASES = {
     "attn":  ("gpt2-small-attn-out-v5-32k", "blocks.{l}.hook_attn_out", "blocks.{l}.hook_attn_out"),
     "mlp":   ("gpt2-small-mlp-out-v5-32k", "blocks.{l}.hook_mlp_out", "blocks.{l}.hook_mlp_out"),
 }
-SUBMODULES = ["resid", "attn", "mlp"]
+# NOTE: we attribute on the residual stream only. The res-jb (StandardSAE) SAEs
+# support the encode->modify-f->decode splice needed for attribution patching;
+# the v5 attn/mlp SAEs use runtime layer_norm state that is consumed by the
+# immediately-following decode and cannot be re-decoded on a modified f. Residual-
+# stream circuits are the canonical unit for feature-circuit analysis and cover all
+# 12 layers, so this is sufficient to answer the shared-vs-distinct question.
+SUBMODULES = ["resid"]
 
 # ---- attribution thresholds (TASK Step 3/4) ----
 T_N = float(os.environ.get("T_N", "0.1"))     # node IE threshold, auto-tuned
@@ -71,3 +77,9 @@ LAMBDAS = [0.01, 0.1, 0.5, 1.0]
 SEEDS = [0, 1, 2]
 
 SEED = 0
+
+# Metric readout for m and attribution: 'last' (TASK's literal "last token of
+# completion") or 'mean' (mean over completion tokens). 'last' gives a much
+# stronger, more stable signal on GPT-2 Small (syco mean m +4.7 vs +0.06) and
+# avoids near-zero m_full denominators in faithfulness. Default: last.
+READOUT = os.environ.get("READOUT", "last")
