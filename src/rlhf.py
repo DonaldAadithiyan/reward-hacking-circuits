@@ -135,7 +135,7 @@ def sequence_logprob(model, gen, prompt_len):
 
 
 def train(hack_type, condition, prompts, steps=C.PPO_STEPS, lam=0.1, beta=0.1,
-          lr=1e-5, device=None, seed=0, log_every=25):
+          lr=5e-5, device=None, seed=0, log_every=25):
     device = device or C.DEVICE
     torch.manual_seed(seed); random.seed(seed)
     model = load_policy(device)
