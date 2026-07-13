@@ -1,6 +1,12 @@
 {
-  "train": "syco_circuit",
-  "eval": "length",
-  "length_hacking_rate_after_syco_circuit": 0.016666666666666666,
-  "length_baseline_hacking_rate": 0.2933333333333333
+  "syco_circuit_on_length": {
+    "baseline_m": 0.2732260704040527,
+    "after_edit_m": 0.2739579141139984,
+    "drop": -0.0007318437099456676
+  },
+  "length_circuit_on_syco": {
+    "baseline_m": 1.3333308100700378,
+    "after_edit_m": 1.293570551276207,
+    "drop": 0.03976025879383083
+  }
 }

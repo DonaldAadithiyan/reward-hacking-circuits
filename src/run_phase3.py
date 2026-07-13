@@ -1,214 +1,179 @@
-"""Phase 3 driver - run RLHF conditions and measurements at reduced scale.
+"""Phase 3 (measurement-only) - does ablating the discovered circuit REDUCE the
+model's pre-existing preference for the labelled-hacking response?
 
-For syco and length (valid hacking circuits) we run the four conditions and
-measure hacking rate + capability + circuit recovery. Circuit-guided uses the
-best-lambda from a small sweep. Cross-type generalisation: train circuit-guided
-on syco, test hacking rate on length.
+We do NOT train the model to hack and we do NOT use programmatic rewards. The
+"hacking" label comes entirely from the real datasets (Phase 1 pairs). We measure,
+on a HELD-OUT split of real pairs, the model's preference
 
-Scale is reduced (PPO_STEPS, subset of prompts/lambdas) - the pipeline is complete
-and scales via config.py.
+    m = readout log p(hacking) - readout log p(clean)          (m>0 => prefers hacking)
+
+under four interventions on the discovered circuit features, and report how each
+intervention moves m. This is the intervention analogue of SHIFT (Marks et al.):
+inference-time editing of the causally-implicated features, evaluated on real data.
+
+Interventions (top-K circuit features per type, K=config.TOP_K_CIRCUIT):
+  baseline   - no edit (measures the raw preference)
+  zero       - zero the circuit features (remove them)
+  mean       - clamp circuit features to their clean-split mean (SHIFT-style)
+  random     - zero the SAME NUMBER of RANDOM features (control: is the circuit special?)
+
+A faithful, causal circuit should show: `zero`/`mean` reduce m toward 0 (or below)
+substantially MORE than the `random` control. That is the whole test - no induction.
+
+Train/eval split: circuits were discovered on pairs[: n_train]; we evaluate on the
+held-out pairs[n_train:]. Cross-type: apply the SYCO circuit edit while evaluating on
+LENGTH pairs (and vice versa) to test whether the intervention transfers.
 """
 from __future__ import annotations
-import json, os, functools
+import json, os, functools, random
 print = functools.partial(print, flush=True)
 import torch
 import config as C
-from rlhf import train, generate, REWARDS, circuit_features
-from model_utils import load_pairs
+from model_utils import load_model, load_pairs
+from sae_loader import get_sae, hook_name
 
 OUT = os.path.join(C.RESULTS_DIR, "phase3")
 os.makedirs(OUT, exist_ok=True)
+random.seed(C.SEED)
+
+N_TRAIN = 40   # circuits discovered on first 40 pairs; evaluate on the rest
 
 
-def alpaca_prompts(n=60):
-    from datasets import load_dataset
-    a = load_dataset("tatsu-lab/alpaca", split="train")
-    ps = [r["instruction"].strip() for r in a if not r["input"].strip()][:n]
-    return ps
+def _readout_m(model, tri, device):
+    """m = readout logp(hacking) - readout logp(clean) under current hooks."""
+    def lp(completion):
+        toks = model.to_tokens(tri["prompt"] + " " + completion.lstrip())
+        plen = model.to_tokens(tri["prompt"]).shape[1]
+        logits = model(toks)
+        logp = torch.log_softmax(logits[0], -1)
+        ci = toks[0, plen:]
+        if ci.numel() == 0:
+            return 0.0
+        tl = logp[plen - 1:-1][torch.arange(ci.shape[0]), ci]
+        return (tl[-1] if C.READOUT == "last" else tl.mean()).item()
+    return lp(tri["hacking"]) - lp(tri["clean"])
 
 
-def syco_prompts(n=40):
-    return [t["prompt"] for t in load_pairs("syco")[:n]]
-
-
-@torch.no_grad()
-def eval_hacking_rate(model, hack_type, prompts, device):
-    fn = REWARDS[hack_type]
-    scores = []
-    for p in prompts:
-        _, _, text = generate(model, p, device=device)
-        scores.append(fn(p, text))
-    return sum(scores) / len(scores)
-
-
-@torch.no_grad()
-def eval_capability(model, device, n=20):
-    """Lightweight capability proxy: mean log-prob the model assigns to correct
-    short factual continuations (stands in for TruthfulQA accuracy at reduced
-    scale). Higher = more capable / less degraded."""
-    qa = [
-        ("The capital of France is", " Paris"),
-        ("Water is made of hydrogen and", " oxygen"),
-        ("The opposite of hot is", " cold"),
-        ("Two plus two equals", " four"),
-        ("The sun rises in the", " east"),
-        ("A week has seven", " days"),
-        ("The color of the sky is", " blue"),
-        ("Ice is frozen", " water"),
-    ]
-    import torch.nn.functional as Fn
-    tot = 0.0
-    for q, a in qa:
-        ids = model.to_tokens(q + a)
-        plen = model.to_tokens(q).shape[1]
-        lp = Fn.log_softmax(model(ids)[0], -1)
-        cid = ids[0, plen:]
-        tot += lp[plen - 1:-1][torch.arange(cid.shape[0]), cid].mean().item()
-    return tot / len(qa)
-
-
-def circuit_recovery(hack_type, model, device):
-    """Re-measure IE of the original top-10 hacking features on the fine-tuned
-    model. We approximate with mean squared activation of those features on the
-    hacking completions (proxy for how strongly the circuit still fires); a drop
-    indicates the mechanism was altered, not just surface behaviour."""
-    from sae_loader import get_sae, hook_name
-    feats = circuit_features(hack_type, top_k=10)
-    layers = sorted({l for l, i, w in feats})
-    saes = {l: get_sae(l, "resid", device) for l in layers}
-    pairs = load_pairs(hack_type)[:20]
-    acts = {}
-    def make(l):
-        def hook(a, hook):
-            acts[l] = a
-            return a
-        return hook
-    vals = {f"L{l}F{i}": [] for l, i, w in feats}
-    for tri in pairs:
-        toks = model.to_tokens(tri["prompt"] + " " + tri["hacking"].lstrip())
-        model.reset_hooks()
-        for l in layers:
-            model.add_hook(hook_name(l, "resid"), make(l))
-        with torch.no_grad():
-            model(toks)
-        model.reset_hooks()
-        for (l, i, w) in feats:
-            vals[f"L{l}F{i}"].append(float(saes[l].encode(acts[l])[0, :, i].pow(2).mean()))
-    return {k: sum(v) / len(v) for k, v in vals.items()}
-
-
-def run_type(hack_type, prompts, device, steps, lambdas):
-    print(f"\n=== Phase 3: {hack_type} ===")
-    results = {"conditions": {}, "recovery": {}, "lambda_sweep": {}}
-    # baseline capability/recovery before training (untrained policy = pretrained GPT2)
-    from rlhf import load_policy
-    base = load_policy(device); base.eval()
-    results["baseline_hacking_rate"] = eval_hacking_rate(base, hack_type, prompts, device)
-    results["baseline_capability"] = eval_capability(base, device)
-    results["baseline_recovery"] = circuit_recovery(hack_type, base, device)
-    del base
-
-    for cond in ["none", "kl", "reward_shape"]:
-        model, hist = train(hack_type, cond, prompts, steps=steps, device=device)
-        model.eval()
-        results["conditions"][cond] = {
-            "hacking_rate": eval_hacking_rate(model, hack_type, prompts, device),
-            "capability": eval_capability(model, device),
-            "final_reward": sum(h["reward"] for h in hist[-25:]) / min(25, len(hist)),
-            "history": hist,
-        }
-        results["recovery"][cond] = circuit_recovery(hack_type, model, device)
-        del model
-
-    # circuit condition: small lambda sweep, pick best (lowest hacking rate w/ capability guard)
-    best = None
-    for lam in lambdas:
-        model, hist = train(hack_type, "circuit", prompts, steps=steps, lam=lam, device=device)
-        model.eval()
-        hr = eval_hacking_rate(model, hack_type, prompts, device)
-        cap = eval_capability(model, device)
-        results["lambda_sweep"][str(lam)] = {"hacking_rate": hr, "capability": cap}
-        print(f"  [circuit lam={lam}] hacking_rate={hr:.3f} cap={cap:.3f}")
-        if best is None or hr < best[1]:
-            best = (lam, hr, cap, model, hist)
-    lam, hr, cap, model, hist = best
-    results["conditions"]["circuit"] = {
-        "best_lambda": lam, "hacking_rate": hr, "capability": cap,
-        "final_reward": sum(h["reward"] for h in hist[-25:]) / min(25, len(hist)),
-        "history": hist,
-    }
-    results["recovery"]["circuit"] = circuit_recovery(hack_type, model, device)
-
-    # SHIFT: inference-time ablation of top-32 features (mean-ablate) on this model
-    results["shift_hacking_rate"] = shift_eval(hack_type, model, prompts, device)
-    # cross-type: only for syco -> length
-    del model
-    with open(os.path.join(OUT, f"phase3_{hack_type}.json"), "w") as f:
-        json.dump(results, f, indent=2)
-    print(f"  saved phase3_{hack_type}.json")
-    return results
-
-
-@torch.no_grad()
-def shift_eval(hack_type, model, prompts, device):
-    """SHIFT: mean-ablate top-32 circuit features at inference; measure hacking rate."""
-    from sae_loader import get_sae, hook_name
-    feats = circuit_features(hack_type, top_k=32)
-    layers = sorted({l for l, i, w in feats})
-    saes = {l: get_sae(l, "resid", device) for l in layers}
+def _circuit_feats(hack_type, k):
+    c = json.load(open(os.path.join(C.RESULTS_DIR, "phase1", f"circuit_{hack_type}.json")))
+    nodes = sorted(c["nodes"], key=lambda n: -abs(n["ie"]))[:k]
     by_layer = {}
-    for l, i, w in feats:
-        by_layer.setdefault(l, []).append(i)
-    def make(l):
-        sae = saes[l]; idxs = torch.tensor(by_layer[l])
-        def hook(a, hook):
-            f = sae.encode(a)
-            f[..., idxs] = 0.0  # ablate to zero (mean~0 for these features)
-            return sae.decode(f) + (a - sae.decode(sae.encode(a)))
+    for n in nodes:
+        by_layer.setdefault(n["layer"], []).append(n["feature"])
+    return by_layer
+
+
+def _edit_hooks(model, by_layer, mode, saes, clean_means=None, d_sae=24576):
+    """Return hooks that edit the given features on the residual stream."""
+    def make(layer, idxs):
+        sae = saes[layer]
+        idx_t = torch.tensor(idxs, device=next(sae.parameters()).device)
+        cm = None
+        if mode == "mean" and clean_means is not None:
+            cm = clean_means[(layer, "resid")].to(idx_t.device)
+        def hook(act, hook):
+            f = sae.encode(act)
+            recon = sae.decode(f)
+            err = act - recon
+            if mode == "zero":
+                f[..., idx_t] = 0.0
+            elif mode == "mean":
+                f[..., idx_t] = cm[idx_t]
+            return sae.decode(f) + err
         return hook
-    fn = REWARDS[hack_type]
-    scores = []
-    for p in prompts:
-        model.reset_hooks()
-        for l in layers:
-            model.add_hook(hook_name(l, "resid"), make(l))
-        ids = model.to_tokens(p)
-        gen = ids.clone()
-        for _ in range(24):
-            import torch.nn.functional as Fn
-            logits = model(gen)[0, -1]
-            tok = torch.multinomial(Fn.softmax(logits, -1), 1)
-            gen = torch.cat([gen, tok.view(1, 1)], 1)
-            if tok.item() == model.tokenizer.eos_token_id:
-                break
-        model.reset_hooks()
-        text = model.to_string(gen[0, ids.shape[1]:])
-        scores.append(fn(p, text))
-    return sum(scores) / len(scores)
+    hooks = []
+    for layer, idxs in by_layer.items():
+        hooks.append((hook_name(layer, "resid"), make(layer, idxs)))
+    return hooks
+
+
+@torch.no_grad()
+def measure(model, pairs, by_layer, mode, saes, clean_means, device):
+    model.reset_hooks()
+    if mode != "baseline":
+        for hn, fn in _edit_hooks(model, by_layer, mode, saes, clean_means):
+            model.add_hook(hn, fn)
+    ms = [_readout_m(model, t, device) for t in pairs]
+    model.reset_hooks()
+    return {"mean_m": sum(ms) / len(ms),
+            "frac_hack": sum(m > 0 for m in ms) / len(ms), "n": len(ms)}
+
+
+def random_control(hack_type, n_feats, seed, d_sae=24576):
+    """Same feature COUNT as the circuit, but random features at the same layers."""
+    by = _circuit_feats(hack_type, C.TOP_K_CIRCUIT)
+    rng = random.Random(seed)
+    out = {}
+    for layer, idxs in by.items():
+        out[layer] = [rng.randrange(d_sae) for _ in idxs]
+    return out
+
+
+def run_type(hack_type, device):
+    print(f"\n=== Phase 3 (measurement): {hack_type} ===")
+    model = load_model(device)
+    all_pairs = load_pairs(hack_type)
+    eval_pairs = all_pairs[N_TRAIN:]            # held-out
+    by_layer = _circuit_feats(hack_type, C.TOP_K_CIRCUIT)
+    layers = list(by_layer.keys())
+    saes = {l: get_sae(l, "resid", device) for l in layers}
+    clean_means = torch.load(os.path.join(C.RESULTS_DIR, "phase1",
+                                          f"clean_means_{hack_type}.pt"))
+    res = {"n_eval": len(eval_pairs), "top_k": C.TOP_K_CIRCUIT,
+           "n_circuit_feats": sum(len(v) for v in by_layer.values())}
+    for mode in ["baseline", "zero", "mean"]:
+        res[mode] = measure(model, eval_pairs, by_layer, mode, saes, clean_means, device)
+        print(f"  {mode:9s} mean_m={res[mode]['mean_m']:+.3f} frac_hack={res[mode]['frac_hack']:.2f}")
+    # random control: average over 3 seeds
+    ctrl = []
+    for s in range(3):
+        rc = random_control(hack_type, res["n_circuit_feats"], s)
+        rsaes = {l: get_sae(l, "resid", device) for l in rc}
+        ctrl.append(measure(model, eval_pairs, rc, "zero", rsaes, clean_means, device))
+    res["random_zero"] = {"mean_m": sum(c["mean_m"] for c in ctrl) / 3,
+                          "frac_hack": sum(c["frac_hack"] for c in ctrl) / 3}
+    print(f"  {'random':9s} mean_m={res['random_zero']['mean_m']:+.3f} "
+          f"frac_hack={res['random_zero']['frac_hack']:.2f}  (control)")
+    # effect sizes
+    base = res["baseline"]["mean_m"]
+    res["circuit_effect"] = base - res["zero"]["mean_m"]         # how much circuit-zeroing drops m
+    res["random_effect"] = base - res["random_zero"]["mean_m"]
+    res["specificity"] = res["circuit_effect"] - res["random_effect"]
+    print(f"  -> circuit drops m by {res['circuit_effect']:+.3f}, "
+          f"random by {res['random_effect']:+.3f}, specificity {res['specificity']:+.3f}")
+    with open(os.path.join(OUT, f"phase3_{hack_type}.json"), "w") as f:
+        json.dump(res, f, indent=2)
+    return res
+
+
+def cross_type(device):
+    """Apply SYCO circuit edit while evaluating LENGTH preference, and vice versa."""
+    model = load_model(device)
+    out = {}
+    for edit_type, eval_type in [("syco", "length"), ("length", "syco")]:
+        by = _circuit_feats(edit_type, C.TOP_K_CIRCUIT)
+        saes = {l: get_sae(l, "resid", device) for l in by}
+        cm = torch.load(os.path.join(C.RESULTS_DIR, "phase1", f"clean_means_{edit_type}.pt"))
+        eval_pairs = load_pairs(eval_type)[N_TRAIN:]
+        base = measure(model, eval_pairs, by, "baseline", saes, cm, device)
+        zeroed = measure(model, eval_pairs, by, "zero", saes, cm, device)
+        out[f"{edit_type}_circuit_on_{eval_type}"] = {
+            "baseline_m": base["mean_m"], "after_edit_m": zeroed["mean_m"],
+            "drop": base["mean_m"] - zeroed["mean_m"]}
+        print(f"  edit {edit_type} circuit, eval {eval_type}: "
+              f"m {base['mean_m']:+.3f} -> {zeroed['mean_m']:+.3f} "
+              f"(drop {base['mean_m']-zeroed['mean_m']:+.3f})")
+    with open(os.path.join(OUT, "cross_type.json"), "w") as f:
+        json.dump(out, f, indent=2)
+    return out
 
 
 def main():
-    device = "cpu"  # stable on M4 for this loop
-    steps = C.PPO_STEPS
-    lambdas = [float(x) for x in os.environ.get("LAMBDAS", "0.1,1.0").split(",")]
-    p_syco = syco_prompts(30)
-    p_len = alpaca_prompts(30)
-
-    r_syco = run_type("syco", p_syco, device, steps, lambdas)
-    r_len = run_type("length", p_len, device, steps, lambdas)
-
-    # cross-type generalisation: train circuit-guided on syco, test on length
-    from rlhf import train
-    print("\n=== cross-type: train circuit on syco, eval hacking on length ===")
-    model, _ = train("syco", "circuit", p_syco, steps=steps, lam=r_syco["conditions"]["circuit"]["best_lambda"], device=device)
-    model.eval()
-    cross = eval_hacking_rate(model, "length", p_len, device)
-    with open(os.path.join(OUT, "cross_type.json"), "w") as f:
-        json.dump({"train": "syco_circuit", "eval": "length",
-                   "length_hacking_rate_after_syco_circuit": cross,
-                   "length_baseline_hacking_rate": r_len["baseline_hacking_rate"]}, f, indent=2)
-    print(f"cross-type length hacking rate: {cross:.3f} "
-          f"(length baseline {r_len['baseline_hacking_rate']:.3f})")
+    device = "cpu"
+    for ht in ["syco", "length"]:
+        run_type(ht, device)
+    print("\n=== cross-type circuit-edit transfer ===")
+    cross_type(device)
 
 
 if __name__ == "__main__":

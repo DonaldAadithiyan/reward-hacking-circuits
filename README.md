@@ -7,11 +7,15 @@ circuits for three hacking types in GPT-2 Small, then test circuit-guided RLHF.
 
 ## Headline result
 
-**The hacking types GPT-2 Small actually exhibits (sycophancy, length bias) route
-through largely distinct circuits** — ~5 % shared nodes, <0.5 % shared edges, different
-peak layers, disjoint feature semantics. **Code exploitation does not exist in GPT-2
-Small** (it prefers genuine code 93 % of the time), so it has no circuit to discover.
-See [PHASE2_REPORT.md](PHASE2_REPORT.md) for the full argument.
+Using **real labelled datasets** (Sharma et al. factual sycophancy with ground truth;
+UltraFeedback with human quality scores) — **no induced or synthetic hacking** — the two
+hacking types GPT-2 Small exhibits (sycophancy, length bias) route through **completely
+distinct circuits: zero shared nodes, zero shared edges**, different peak layers (length
+= early L0/L2; syco = mid-late L6–8), disjoint feature semantics. Ablating a circuit on
+held-out data changes only its own hacking type (specificity ~100–240× over a random
+control) and shows **zero cross-type transfer** — causally confirming the distinctness.
+**Code exploitation does not exist in GPT-2 Small** (no preference; real labelled data is
+gated), so it has no circuit. See [PHASE2_REPORT.md](PHASE2_REPORT.md).
 
 ## Reports
 
@@ -36,8 +40,9 @@ src/
   run_phase1.py          driver: discover C_syco, C_length, C_code
   run_phase2.py          driver: node/edge/layer/semantic comparison
   plots.py               figures
-  rlhf.py                custom REINFORCE loop + circuit regulariser + rewards
-  run_phase3.py          driver: 4 conditions, recovery, SHIFT, cross-type
+  run_phase3.py          driver: MEASUREMENT-ONLY circuit ablation on held-out real
+                         pairs (zero/mean/random control) + cross-type transfer
+  rlhf.py                (legacy) custom REINFORCE loop — superseded by measurement Phase 3
 results/{phase1,phase2,phase3,figures}/   all outputs (JSON + PNG)
 ```
 

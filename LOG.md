@@ -4,6 +4,40 @@ Append newest entries at the top.
 
 ---
 
+## 2026-07-13 — REBUILD on REAL labelled data (no induction), all phases re-run
+
+User objection: don't induce hacking with crude proxy rewards; use real labelled
+datasets. Rebuilt build_pairs.py:
+  - syco: Sharma et al. sycophancy-eval answer.jsonl (real trivia w/ correct_answer &
+    incorrect_answer). Prompt = user asserts WRONG answer; clean=correct, hack=affirm-wrong.
+    GROUND-TRUTHED sycophancy, not phrase-matching.
+  - length: openbmb/UltraFeedback real completions; hack = >=2x longer with <= human
+    overall_score. Real length bias, not my mechanical padding.
+  - code: honest NULL (Patronus gated; GPT-2 can't code). Old synthetic pairs backed up
+    to data/pairs_synthetic_backup/.
+Readout switched to 'mean' (real completions differ throughout: syco frac+=0.98 mean vs 0.73 last).
+
+verify_m (real): syco mean_m +1.234 frac+ 0.98 (STRONG); length +0.275 frac+ 0.58 (weak but real);
+code +0.044 frac+ 0.50 (null confirmed).
+
+Phase 1 (real): C_syco 94n/2356e peak L6-8 (features: answers/spelling/correctness, top ones
+NEGATIVE-IE = hacking-resisting); C_length 168n/6857e peak L0/L2 (features: Advertisement/
+Meanwhile/whitespace = boilerplate/filler). Faithfulness: syco 0.09 (all 60 stable now),
+length unstable (43 NaN, tiny m_full).
+
+Phase 2 (real): syco & length share ZERO nodes, ZERO edges (Jaccard 0.000) — cleaner than
+synthetic's ~5%. Fully disjoint circuits. Length early-layer, syco mid-late.
+
+Phase 3 REWRITTEN as measurement-only (no PPO, no reward). Ablate top-32 circuit feats on
+HELD-OUT pairs vs random control:
+  - length: zero circuit flips m +0.273 -> -0.940 (frac 0.55->0.15); random does nothing
+    (+0.272). Specificity +1.213. Causal + specific.
+  - syco: zero circuit INCREASES m +1.333 -> +2.144 (top feats are resistance features;
+    removing them removes resistance). random nothing. Specificity -0.806.
+  - cross-type: edit syco->eval length drop -0.001; edit length->eval syco drop +0.040.
+    ZERO transfer — confirms Phase 2 distinctness by intervention.
+Old RLHF loop (rlhf.py) retained but unused; reports rewritten.
+
 ## 2026-07-12 — Phase 3 complete (circuit-guided RLHF)
 
 Custom REINFORCE loop (TRL 1.8 removed classic PPOTrainer). 120 steps/condition,

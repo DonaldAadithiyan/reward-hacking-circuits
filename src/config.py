@@ -79,7 +79,8 @@ SEEDS = [0, 1, 2]
 SEED = 0
 
 # Metric readout for m and attribution: 'last' (TASK's literal "last token of
-# completion") or 'mean' (mean over completion tokens). 'last' gives a much
-# stronger, more stable signal on GPT-2 Small (syco mean m +4.7 vs +0.06) and
-# avoids near-zero m_full denominators in faithfulness. Default: last.
-READOUT = os.environ.get("READOUT", "last")
+# completion") or 'mean' (mean over completion tokens). On the REAL labelled
+# datasets the clean/hacking completions differ in content throughout, so the
+# 'mean' readout is the stronger, cleaner signal (syco frac(m>0)=0.98 mean vs
+# 0.73 last). Default: mean. (On the old synthetic pairs 'last' was stronger.)
+READOUT = os.environ.get("READOUT", "mean")
