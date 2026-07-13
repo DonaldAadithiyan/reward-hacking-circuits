@@ -66,32 +66,35 @@ for n in nodes:
     ax.text(L, y - 0.62, f"{'+' if n['ie']>0 else ''}{n['ie']:.2f}",
             ha="center", va="top", color=SOFT, fontsize=8, family="monospace", zorder=4)
 
-ax.set_xlim(0.4, max(layers) + 0.6)
-ax.set_ylim(-4.2, 3.4)
+# extra vertical room: top band for title+legend, bottom band for the token box.
+# nodes/edges live in roughly y in [-3, 3]; axis labels sit at y=-3.7.
+ax.set_xlim(0.2, max(layers) + 0.8)
+ax.set_ylim(-8.6, 5.4)
 ax.axis("off")
 
-ax.text(0.5, 3.15, "The sycophancy circuit, as discovered  ·  GPT-2 Small",
+ax.text(0.4, 5.0, "The sycophancy circuit, as discovered  ·  GPT-2 Small",
         fontsize=17, fontweight="bold", color=INK, family="sans-serif")
-ax.text(0.5, 2.72,
+ax.text(0.4, 4.45,
         "Top 14 of 94 nodes, 30 of 2,356 edges from circuit_syco.json  ·  "
         "x = layer  ·  size and edge-width proportional to |IE|  ·  mean m = +1.234",
         fontsize=10.5, color=SOFT)
 
-# legend
-ax.scatter([], [], s=200, c=NEG, label="negative IE — resists sycophancy")
-ax.scatter([], [], s=200, c=POS, label="positive IE — drives sycophancy")
-leg = ax.legend(loc="lower left", bbox_to_anchor=(0.0, 0.0), frameon=False,
-                fontsize=10, labelcolor=INK)
+# legend: empty bottom-right band, below the axis labels, clear of nodes & subtitle
+lx = max(layers) - 2.4
+ax.scatter([lx], [-5.0], s=150, c=NEG)
+ax.text(lx + 0.18, -5.0, "negative IE — resists sycophancy", va="center", fontsize=9.5, color=INK)
+ax.scatter([lx], [-5.7], s=150, c=POS)
+ax.text(lx + 0.18, -5.7, "positive IE — drives sycophancy", va="center", fontsize=9.5, color=INK)
 
-# token annotation for the main resisting chain
+# token annotation box: in the empty bottom band, below the L# axis labels (y=-3.7)
 chain = [(4,10160),(5,19700),(3,8495),(2,2550),(1,4213)]
 lines = ["correct-answer chain (all resist):"]
 for (L,f) in sorted(chain):
     tk = ", ".join(interp.get((L,f), []))
     lines.append(f"  L{L} F{f}: {tk}")
-ax.text(max(layers)+0.05, -1.2, "\n".join(lines), fontsize=8.6,
+ax.text(0.5, -4.6, "\n".join(lines), fontsize=9.2,
         family="monospace", color=INK, va="top", ha="left",
-        bbox=dict(boxstyle="round,pad=0.5", fc="white", ec=GRID))
+        bbox=dict(boxstyle="round,pad=0.7", fc="white", ec=GRID))
 
 out = os.path.join(C.RESULTS_DIR, "figures", "syco_circuit.png")
 fig.tight_layout()
