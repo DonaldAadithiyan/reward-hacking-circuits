@@ -1,0 +1,99 @@
+"""Render the real sycophancy causal circuit (top subgraph) to a PNG.
+
+Reads results/phase1/circuit_syco.json, draws the top-|IE| nodes on a layer axis
+with causal edges (width d |IE|, colour = IE sign) and a token side-table.
+"""
+import json, os
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.patches import FancyArrowPatch
+import numpy as np
+import config as C
+
+NEG = "#1f9e94"   # negative IE - resists sycophancy
+POS = "#d07b26"   # positive IE - drives sycophancy
+INK = "#1a1c22"; SOFT = "#5b5f70"; GRID = "#e6e3da"; BG = "#faf9f6"
+
+c = json.load(open(os.path.join(C.RESULTS_DIR, "phase1", "circuit_syco.json")))
+nodes = sorted(c["nodes"], key=lambda n: -abs(n["ie"]))[:14]
+keyset = {(n["layer"], n["feature"]) for n in nodes}
+edges = [e for e in c["edges"]
+         if (e["lu"], e["iu"]) in keyset and (e["ld"], e["id"]) in keyset]
+edges = sorted(edges, key=lambda e: -abs(e["ie"]))[:30]
+interp = {(d["layer"], d["feature"]): [t for t, _ in d["top_tokens"][:4]]
+          for d in c["top_nodes_interpreted"]}
+
+# ---- layout: x = layer, y = stacked within layer ----
+by_layer = {}
+for n in nodes:
+    by_layer.setdefault(n["layer"], []).append(n)
+maxIE = max(abs(n["ie"]) for n in nodes)
+pos = {}
+for L, grp in by_layer.items():
+    grp.sort(key=lambda n: -abs(n["ie"]))
+    for i, n in enumerate(grp):
+        off = (i - (len(grp) - 1) / 2) * 1.15
+        pos[(n["layer"], n["feature"])] = (L, off)
+
+fig, ax = plt.subplots(figsize=(14, 8), dpi=140)
+fig.patch.set_facecolor(BG); ax.set_facecolor(BG)
+
+layers = sorted({n["layer"] for n in nodes})
+for L in layers:
+    ax.axvline(L, color=GRID, lw=1, zorder=0)
+    ax.text(L, -3.7, f"L{L}", ha="center", va="top", color=SOFT,
+            fontsize=11, family="monospace")
+
+# ---- edges ----
+maxE = max(abs(e["ie"]) for e in edges)
+for e in edges:
+    a = pos[(e["lu"], e["iu"])]; b = pos[(e["ld"], e["id"])]
+    col = NEG if e["ie"] < 0 else POS
+    lw = 0.6 + 3.2 * (abs(e["ie"]) / maxE)
+    arr = FancyArrowPatch(a, b, connectionstyle="arc3,rad=0.18",
+                          arrowstyle="-", lw=lw, color=col, alpha=0.38, zorder=1)
+    ax.add_patch(arr)
+
+# ---- nodes ----
+for n in nodes:
+    L, y = pos[(n["layer"], n["feature"])]
+    col = NEG if n["ie"] < 0 else POS
+    s = 260 + 1500 * (abs(n["ie"]) / maxIE)
+    ax.scatter([L], [y], s=s, c=col, edgecolors=BG, linewidths=2, zorder=3)
+    ax.text(L, y + 0.02, f"F{n['feature']}", ha="center", va="center",
+            color="white", fontsize=8.5, family="monospace", fontweight="bold", zorder=4)
+    ax.text(L, y - 0.62, f"{'+' if n['ie']>0 else ''}{n['ie']:.2f}",
+            ha="center", va="top", color=SOFT, fontsize=8, family="monospace", zorder=4)
+
+ax.set_xlim(0.4, max(layers) + 0.6)
+ax.set_ylim(-4.2, 3.4)
+ax.axis("off")
+
+ax.text(0.5, 3.15, "The sycophancy circuit, as discovered  ·  GPT-2 Small",
+        fontsize=17, fontweight="bold", color=INK, family="sans-serif")
+ax.text(0.5, 2.72,
+        "Top 14 of 94 nodes, 30 of 2,356 edges from circuit_syco.json  ·  "
+        "x = layer  ·  size and edge-width proportional to |IE|  ·  mean m = +1.234",
+        fontsize=10.5, color=SOFT)
+
+# legend
+ax.scatter([], [], s=200, c=NEG, label="negative IE — resists sycophancy")
+ax.scatter([], [], s=200, c=POS, label="positive IE — drives sycophancy")
+leg = ax.legend(loc="lower left", bbox_to_anchor=(0.0, 0.0), frameon=False,
+                fontsize=10, labelcolor=INK)
+
+# token annotation for the main resisting chain
+chain = [(4,10160),(5,19700),(3,8495),(2,2550),(1,4213)]
+lines = ["correct-answer chain (all resist):"]
+for (L,f) in sorted(chain):
+    tk = ", ".join(interp.get((L,f), []))
+    lines.append(f"  L{L} F{f}: {tk}")
+ax.text(max(layers)+0.05, -1.2, "\n".join(lines), fontsize=8.6,
+        family="monospace", color=INK, va="top", ha="left",
+        bbox=dict(boxstyle="round,pad=0.5", fc="white", ec=GRID))
+
+out = os.path.join(C.RESULTS_DIR, "figures", "syco_circuit.png")
+fig.tight_layout()
+fig.savefig(out, dpi=140, facecolor=BG, bbox_inches="tight")
+print("wrote", out)
