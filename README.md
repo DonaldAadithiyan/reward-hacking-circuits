@@ -22,6 +22,13 @@ they are mechanistically independent. **Code exploitation does not exist in GPT-
 (no preference; the real labelled set is gated), so it has no circuit. See
 [PHASE2_REPORT.md](PHASE2_REPORT.md) and [PHASE3_REPORT.md](PHASE3_REPORT.md).
 
+**But not every "hacking" circuit is hacking-specific.** A control test (PHASE2 §7b)
+shows the length circuit **overlaps 25/32 of its top features with a *legitimate*-verbosity
+circuit** (longer answers that are genuinely better) — so it is a generic "produce more
+text" circuit, and penalising it would harm justified long answers. Sycophancy has no
+legitimate counterpart, so `C_syco` is safe to target; length, as operationalised here,
+is not. Mechanistic separability is a property to *verify per behaviour*, not assume.
+
 ## Reports
 
 - [PHASE1_REPORT.md](PHASE1_REPORT.md) — datasets, m-verification, the three circuits, feature interpretation.

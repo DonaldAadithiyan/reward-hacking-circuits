@@ -1,0 +1,265 @@
+{
+  "typeA": {
+    "name": "length hacking (longer, NOT better)",
+    "n_nodes": 168,
+    "n_edges": 6857
+  },
+  "typeB": {
+    "name": "legitimate verbosity (longer AND better)",
+    "n_nodes": 182,
+    "n_edges": 11908
+  },
+  "node_jaccard": 0.23674911660777384,
+  "edge_jaccard": 0.08883602181733782,
+  "n_shared_nodes": 67,
+  "null_node_jaccard": 0.0002493660046767444,
+  "top32_A_features_also_in_B": 25,
+  "top32_A_recurring": [
+    {
+      "layer": 0,
+      "feature": 9440,
+      "tokens_in_A": [
+        "rike",
+        "mosp",
+        " ItemLevel",
+        "ictionary"
+      ],
+      "tokens_in_B": []
+    },
+    {
+      "layer": 0,
+      "feature": 18861,
+      "tokens_in_A": [
+        ".",
+        ",",
+        "roid",
+        ";"
+      ],
+      "tokens_in_B": []
+    },
+    {
+      "layer": 0,
+      "feature": 19133,
+      "tokens_in_A": [
+        "rike",
+        "arching",
+        " unfocusedRange",
+        "\ufffd\ufffd\ufffd"
+      ],
+      "tokens_in_B": []
+    },
+    {
+      "layer": 0,
+      "feature": 19462,
+      "tokens_in_A": [],
+      "tokens_in_B": []
+    },
+    {
+      "layer": 1,
+      "feature": 3626,
+      "tokens_in_A": [],
+      "tokens_in_B": []
+    },
+    {
+      "layer": 1,
+      "feature": 6831,
+      "tokens_in_A": [
+        "uffs",
+        "usional",
+        "\u65b9",
+        "tower"
+      ],
+      "tokens_in_B": [
+        "uffs",
+        "usional",
+        "\u65b9",
+        "tower"
+      ]
+    },
+    {
+      "layer": 1,
+      "feature": 14479,
+      "tokens_in_A": [],
+      "tokens_in_B": []
+    },
+    {
+      "layer": 2,
+      "feature": 757,
+      "tokens_in_A": [],
+      "tokens_in_B": []
+    },
+    {
+      "layer": 2,
+      "feature": 1189,
+      "tokens_in_A": [],
+      "tokens_in_B": [
+        "\u2500\u2500",
+        "\ufe0f",
+        "\ufffd",
+        "\ufffd"
+      ]
+    },
+    {
+      "layer": 2,
+      "feature": 5277,
+      "tokens_in_A": [],
+      "tokens_in_B": []
+    },
+    {
+      "layer": 2,
+      "feature": 12756,
+      "tokens_in_A": [
+        "\ufe0f",
+        "\ufffd",
+        "\u5973",
+        "\ufffd"
+      ],
+      "tokens_in_B": [
+        "\ufe0f",
+        "\ufffd",
+        "\u5973",
+        "\ufffd"
+      ]
+    },
+    {
+      "layer": 2,
+      "feature": 20072,
+      "tokens_in_A": [
+        "hov",
+        "\ufffd\ufffd",
+        "\u65b9",
+        " Ging"
+      ],
+      "tokens_in_B": [
+        "hov",
+        "\ufffd\ufffd",
+        "\u65b9",
+        " Ging"
+      ]
+    },
+    {
+      "layer": 2,
+      "feature": 21401,
+      "tokens_in_A": [
+        "ierre",
+        "\u65b9",
+        "lycer",
+        "ois"
+      ],
+      "tokens_in_B": [
+        "ierre",
+        "\u65b9",
+        "lycer",
+        "ois"
+      ]
+    },
+    {
+      "layer": 2,
+      "feature": 23548,
+      "tokens_in_A": [
+        "Advertisement",
+        "\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0",
+        "Meanwhile",
+        "Interest"
+      ],
+      "tokens_in_B": [
+        "Advertisement",
+        "\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0",
+        "Meanwhile",
+        "Interest"
+      ]
+    },
+    {
+      "layer": 3,
+      "feature": 3961,
+      "tokens_in_A": [],
+      "tokens_in_B": [
+        " Additionally",
+        " Needless",
+        " However",
+        " Alternatively"
+      ]
+    },
+    {
+      "layer": 3,
+      "feature": 17242,
+      "tokens_in_A": [],
+      "tokens_in_B": []
+    },
+    {
+      "layer": 3,
+      "feature": 18271,
+      "tokens_in_A": [
+        "undrum",
+        "\ufffd\ufffd\ufffd",
+        "reenshots",
+        "':"
+      ],
+      "tokens_in_B": [
+        "undrum",
+        "\ufffd\ufffd\ufffd",
+        "reenshots",
+        "':"
+      ]
+    },
+    {
+      "layer": 3,
+      "feature": 20161,
+      "tokens_in_A": [],
+      "tokens_in_B": [
+        "zbek",
+        " moreover",
+        "lycer",
+        "anwhile"
+      ]
+    },
+    {
+      "layer": 3,
+      "feature": 21044,
+      "tokens_in_A": [
+        "theless",
+        " comprom",
+        " planners",
+        "ITNESS"
+      ],
+      "tokens_in_B": []
+    },
+    {
+      "layer": 4,
+      "feature": 10696,
+      "tokens_in_A": [],
+      "tokens_in_B": []
+    },
+    {
+      "layer": 5,
+      "feature": 12410,
+      "tokens_in_A": [],
+      "tokens_in_B": []
+    },
+    {
+      "layer": 5,
+      "feature": 12416,
+      "tokens_in_A": [],
+      "tokens_in_B": []
+    },
+    {
+      "layer": 6,
+      "feature": 9635,
+      "tokens_in_A": [],
+      "tokens_in_B": []
+    },
+    {
+      "layer": 6,
+      "feature": 18709,
+      "tokens_in_A": [],
+      "tokens_in_B": []
+    },
+    {
+      "layer": 9,
+      "feature": 1010,
+      "tokens_in_A": [],
+      "tokens_in_B": []
+    }
+  ],
+  "verdict": "CONFOUNDED \u2014 a substantial share of the top length-hacking features are ALSO active in the legitimate-verbosity circuit; penalising them would suppress justified long answers too."
+}

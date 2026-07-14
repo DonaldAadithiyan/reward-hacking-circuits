@@ -108,6 +108,46 @@ confirms it directly.
 
 ---
 
+## Section 7b — Control: is the length circuit hacking-specific, or just length-generic?
+
+A circuit discovered from short-vs-long pairs risks capturing *length itself* rather than
+*unjustified length*. We tested this with a control circuit (Type B), keeping the metric
+direction identical but flipping the label:
+
+- **Type A (hacking)** — longer response, **≤** quality (padding). This is `C_length`.
+- **Type B (legitimate)** — longer response, **≥ +1.0** quality (length was warranted).
+  Discovered as `circuit_length_ctrl` on 60 real UltraFeedback pairs.
+
+If A and B are disjoint, the length features are hacking-specific and safe to penalise.
+If they overlap, `C_length` also fires during *justified* verbosity and penalising it
+would harm good long answers.
+
+| Comparison | node Jaccard | null | top-32 A features also in B |
+|---|---|---|---|
+| syco vs length | 0.000 | 0.0002 | — |
+| **length-hack (A) vs legit-verbosity (B)** | **0.237** | 0.0003 | **25 / 32** |
+
+**Verdict: CONFOUNDED.** The Type A and Type B length circuits overlap ~950× above the
+random null, and **25 of the 32 highest-|IE| length-hacking features are also in the
+legitimate-verbosity circuit** — with identical top tokens (e.g. F23548
+`Advertisement / Meanwhile`, F20072, F21401, F12756). So `C_length` is essentially a
+**generic "produce more text" circuit**, not a reward-hacking-specific one: ~78 % of its
+top features fire whether or not the extra length was justified.
+
+**Consequence.** Using `C_length` for reward shaping (as the legacy Phase 3 RLHF did)
+would penalise legitimately-verbose good answers about as much as padded ones. The root
+cause is the contrast used for discovery — Type A pairs vary *length*, so attribution
+captures length, not *unjustified* length. A clean length-hacking circuit would need
+**length-controlled** pairs (equal length, dense-vs-padded), isolating padding features.
+
+By contrast **sycophancy has no legitimate counterpart** — affirming a factually-wrong
+answer is never correct — so `C_syco` is not subject to this confound and is safe to
+target. This asymmetry is itself a finding: not every "hacking" behaviour has a
+mechanistically separable circuit; length bias, as operationalised here, does not.
+
+Data: `results/phase2/length_ab_comparison.json`; discovery `src/compare_length_ab.py`,
+`src/build_length_control.py`.
+
 ## Section 8 — Honest limitations
 
 - **Faithfulness is inconclusive** for length (numerical blow-up on long real

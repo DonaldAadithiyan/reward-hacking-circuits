@@ -4,6 +4,26 @@ Append newest entries at the top.
 
 ---
 
+## 2026-07-14 — Type A vs Type B length control: length circuit is CONFOUNDED
+
+Tested whether the length-hacking circuit is hacking-specific or just length-generic.
+Built Type B pairs (UltraFeedback: longer AND >= +1.0 higher quality = LEGITIMATE
+verbosity) via build_length_control.py; discovered circuit_length_ctrl (182 nodes).
+Compared to Type A circuit_length (hacking verbosity) via compare_length_ab.py.
+
+RESULT: node Jaccard A vs B = 0.237 (null 0.00025) — MASSIVE overlap (cf syco-vs-length
+= 0.000). 67 shared nodes. **25 of the top-32 Type A hacking features are ALSO in the
+Type B legit-verbosity circuit** — identical tokens (F23548 Advertisement/Meanwhile,
+F20072, F21401, F12756...). VERDICT: CONFOUNDED.
+
+Meaning: the "length circuit" is a generic "produce longer text" circuit, NOT a
+reward-hacking-specific one. ~78% of its top features fire whether or not the length was
+justified. Penalising it (old Phase 3 RLHF) would harm legitimately-verbose good answers.
+Contrast: sycophancy has NO legitimate counterpart (affirming a factually-wrong answer is
+never right), so C_syco IS safe to target. Root cause: Type A pairs contrast short-vs-long,
+so IE captures length itself, not unjustified length. Fix would need length-controlled
+pairs (equal length, dense-vs-padded). Wrote results/phase2/length_ab_comparison.json.
+
 ## 2026-07-13 — REBUILD on REAL labelled data (no induction), all phases re-run
 
 User objection: don't induce hacking with crude proxy rewards; use real labelled
